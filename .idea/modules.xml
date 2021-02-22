@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/BSP4_website.iml" filepath="$PROJECT_DIR$/.idea/BSP4_website.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../../../../Semester_3/BSP3/Code/GoodnessGroceries_Project/.idea/GoodnessGroceries_Project.iml" filepath="$PROJECT_DIR$/../../../../Semester_3/BSP3/Code/GoodnessGroceries_Project/.idea/GoodnessGroceries_Project.iml" />
+    </modules>
+  </component>
+</project>
