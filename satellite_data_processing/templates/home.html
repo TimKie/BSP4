@@ -1,4 +1,72 @@
 {% extends 'base.html' %}
 {% block content %}
-    <h1>This is the Home Page</h1>
+    <!-- Location Input -->
+    <form>
+      <div class="form-row align-items-center">
+        <div class="col-sm-10">
+          <input type="text" class="form-control" id="inlineFormInputName" placeholder="Enter Location">
+        </div>
+        <div class="col-sm-auto">
+          <button type="submit" class="btn btn-primary">Submit</button>
+        </div>
+      </div>
+    </form>
+
+    <br>
+
+    <!-- Date Picker -->
+    <div class="form-row align-items-center">
+        <div class="col-sm-6 form-group pmd-textfield pmd-textfield-floating-label">
+            <label class="control-label" for="datepicker1">From:</label>
+            <input type="date" id="datepicker1" class="form-control" />
+        </div>
+        <div class="col-sm-6 form-group pmd-textfield pmd-textfield-floating-label">
+            <label class="control-label" for="datepicker2">To:</label>
+            <input type="date" id="datepicker2" class="form-control" />
+        </div>
+    </div>
+
+    <br>
+
+    <!-- Radio Buttons -->
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" value="" id="defaultCheck1">
+      <label class="form-check-label" for="defaultCheck1">
+        Attribute 1
+      </label>
+    </div>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" value="" id="defaultCheck2">
+      <label class="form-check-label" for="defaultCheck2">
+        Attribute 2
+      </label>
+    </div>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" value="" id="defaultCheck3">
+      <label class="form-check-label" for="defaultCheck3">
+        Attribute 3
+      </label>
+    </div>
+    <div class="form-check form-check-inline">
+      <input class="form-check-input" type="checkbox" value="" id="defaultCheck4">
+      <label class="form-check-label" for="defaultCheck4">
+        Attribute 4
+      </label>
+    </div>
+
+    <br>
+    <br>
+
+    <!-- Slider -->
+    <form>
+      <div class="form-group">
+        <label for="formControlRange">Change Field Of View</label>
+        <input type="range" class="form-control-range" id="formControlRange">
+      </div>
+    </form>
+
+    <br>
+
+    <!-- Placeholder Image -->
+    <img src="static/Test_Image.jpg" class="img-fluid rounded">
 {% endblock content %}
