@@ -98,14 +98,14 @@ import shapely.geometry
 import urllib.request
 import zipfile
 
+url = "https://prd-wret.s3-us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/files/WRS2_descending_0.zip"
+r = urllib.request.urlopen(url)
+zip_file = zipfile.ZipFile(io.BytesIO(r.read()))
+zip_file.extractall("landsat-path-row")
+zip_file.close()
+
 
 def get_row_path(lat, lon):
-    url = "https://prd-wret.s3-us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/files/WRS2_descending_0.zip"
-    r = urllib.request.urlopen(url)
-    zip_file = zipfile.ZipFile(io.BytesIO(r.read()))
-    zip_file.extractall("landsat-path-row")
-    zip_file.close()
-
     shapefile = 'landsat-path-row/WRS2_descending.shp'
     wrs = osgeo.ogr.Open(shapefile)
     layer = wrs.GetLayer(0)

@@ -11,8 +11,8 @@ def home(request):
     geolocator = Nominatim(user_agent='satellite_data_processing')
 
     # initial location which is displayed on the map
-    ip = get_ip_address(request)                # this code cannot be used when working with the localhost
-    ip = '2.56.107.255'                         # so the ip address is overwritten with a static ip address for development
+    ip = get_ip_address(request)  # this code cannot be used when working with the localhost
+    ip = '2.56.107.255'  # so the ip address is overwritten with a static ip address for development
     country, city, initial_location_lat, initial_location_lon = get_geoip(ip)
 
     initial_location = geolocator.geocode(city)
@@ -42,7 +42,7 @@ def home(request):
         folium.Marker([location_lat, location_lon], tooltip='click here for more info',
                       popup=location, icon=folium.Icon(color='blue')).add_to(m)
 
-        #instance.save()
+        # instance.save()
 
     # transform the map into html code
     m = m._repr_html_()
@@ -60,6 +60,9 @@ def about(request):
 
 
 # --------------------------------------- AWS Test ---------------------------------------
+import pandas as pd
+
+
 def aws_test(request):
     form = FindLocationForm(request.POST or None)
     geolocator = Nominatim(user_agent='satellite_data_processing')
@@ -69,6 +72,7 @@ def aws_test(request):
     location_lon = 0
     path = 0
     row = 0
+    scene = ""
 
     if form.is_valid():
         instance = form.save(commit=False)
@@ -82,12 +86,22 @@ def aws_test(request):
 
         path, row = get_row_path(location_lat, location_lon)
 
+        # get scenes for row and path
+        all_scenes = pd.read_csv('scene_list.gz', compression='gzip')
+        scenes = all_scenes[(all_scenes.path == path) & (all_scenes.row == row) &
+                            (~all_scenes.productId.str.contains('_T2')) &
+                            (~all_scenes.productId.str.contains('_RT'))]
+        scene = scenes.sort_values('cloudCover').iloc[0]
+
+        #scene.to_csv("scenes_lux.csv")
+
     context = {
         'form': form,
         'lat': location_lat,
         'lon': location_lon,
         'path': path,
         'row': row,
+        'scene': scene,
     }
 
     return render(request, 'aws.html', context)
@@ -104,8 +118,8 @@ def earth_engine_view(request):
     geolocator = Nominatim(user_agent='satellite_data_processing')
 
     # initial location which is displayed on the map
-    ip = get_ip_address(request)                # this code cannot be used when working with the localhost
-    ip = '2.56.107.255'                         # so the ip address is overwritten with a static ip address for development
+    ip = get_ip_address(request)  # this code cannot be used when working with the localhost
+    ip = '2.56.107.255'  # so the ip address is overwritten with a static ip address for development
     country, city, initial_location_lat, initial_location_lon = get_geoip(ip)
 
     initial_location = geolocator.geocode(city)
@@ -135,7 +149,7 @@ def earth_engine_view(request):
         folium.Marker([location_lat, location_lon], tooltip='click here for more info',
                       popup=location, icon=folium.Icon(color='blue')).add_to(m)
 
-        #instance.save()
+        # instance.save()
 
     # Add custom basemaps to folium
     basemaps = {
@@ -165,7 +179,8 @@ def earth_engine_view(request):
     occurrenceVis = {
         'min': 0.0,
         'max': 100.0,
-        'palette': ['ffffff', 'ffbbbb', '0000ff']                   # List of CSS-style color strings (single-band images only)	comma-separated list of hex strings
+        'palette': ['ffffff', 'ffbbbb', '0000ff']
+        # List of CSS-style color strings (single-band images only)	comma-separated list of hex strings
     }
     m.add_ee_layer(occurrence, occurrenceVis, 'JRC Surface Water')
 
@@ -175,8 +190,8 @@ def earth_engine_view(request):
     ndvi_colorizedVis = {
         'min': 0.0,
         'max': 1.0,
-        'palette': ['FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163', '99B718', '74A901','66A000', '529400', '3E8601',
-                    '207401', '056201', '004C00', '023B01','012E01', '011D01', '011301'],
+        'palette': ['FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163', '99B718', '74A901', '66A000', '529400', '3E8601',
+                    '207401', '056201', '004C00', '023B01', '012E01', '011D01', '011301'],
     }
     m.add_ee_layer(ndvi_colorized, ndvi_colorizedVis, 'NDVI')
 
@@ -209,4 +224,3 @@ def earth_engine_view(request):
     }
 
     return render(request, 'earth_engine.html', context)
-
