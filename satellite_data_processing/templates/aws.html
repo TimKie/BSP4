@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block content %}
+
+<h5>Enter the Location you want to find below</h5>
+<form action="" method="POST" autocomplete="off">
+    {% csrf_token %}
+    {{ form|crispy }}
+    <button type="submit" class="btn btn-primary">Find</button>
+</form>
+
+<br>
+
+{% if form.is_valid %}
+    <h4>Information corresponding to entered location:</h4>
+    <table class="table">
+      <thead>
+        <tr>
+          <th scope="col">Longitude</th>
+          <th scope="col">Latitude</th>
+          <th scope="col">Row</th>
+          <th scope="col">Path</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ lon }}</td>
+          <td>{{ lat }}</td>
+          <td>{{ row }}</td>
+          <td>{{ path }}</td>
+        </tr>
+      </tbody>
+    </table>
+{% endif %}
+
+{{ map|safe }}
+
+{% endblock content %}

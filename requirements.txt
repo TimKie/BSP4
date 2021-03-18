@@ -3,3 +3,8 @@ django-crispy-forms
 geopy
 geoip2
 folium
+earthengine-api~=0.1.254
+pandas
+rasterio
+geopandas
+gdal
