@@ -33,6 +33,10 @@
     </table>
 
     <a href="{{ scene.download_url }}" target="_blank">Click here for more information</a>
+
+    <br>
+
+    <img src="data:image/png;base64, {{ ndvi_img|safe }}">
 {% endif %}
 
 {% endblock content %}

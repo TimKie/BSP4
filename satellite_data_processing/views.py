@@ -150,6 +150,7 @@ def aws_test(request):
     path = 0
     row = 0
     scene = ""
+    ndvi_img = 0
 
     if form.is_valid():
         location_ = form.cleaned_data.get('location')
@@ -169,7 +170,10 @@ def aws_test(request):
                             (~all_scenes.productId.str.contains('_RT'))]
         scene = scenes.sort_values('cloudCover').iloc[0]
 
-        #scene.to_csv("scenes_lux.csv")
+        # save data of band 4 and band 5
+        get_bands_data(scene, ['B4.TIF', 'B5.TIF'])
+
+        ndvi_img = compute_NDVI('./L8_raw_data')
 
     context = {
         'form': form,
@@ -178,6 +182,7 @@ def aws_test(request):
         'path': path,
         'row': row,
         'scene': scene,
+        'ndvi_img': ndvi_img,
     }
 
     return render(request, 'aws.html', context)

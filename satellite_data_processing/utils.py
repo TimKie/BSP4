@@ -129,3 +129,109 @@ def get_row_path(lat, lon):
     row = feature['ROW']
 
     return path, row
+
+
+# ---------------------------------------------------- AWS get data ----------------------------------------------------
+import requests
+from bs4 import BeautifulSoup
+import os, shutil
+
+
+def get_bands_data(scene, list_of_file_suffix):
+    # Request the html text of the download_url from the amazon server.
+    response = requests.get(scene.download_url)
+
+    # Check the status code works
+    if response.status_code == 200:
+
+        # Import the html to beautiful soup
+        html = BeautifulSoup(response.content, 'html.parser')
+
+        # Create the directory to store the files
+        storeInFolder = './L8_raw_data'
+
+        # Second loop: for each band of this image that we find using the html <li> tag
+        for li in html.find_all('li'):
+
+            # Get the href tag - this links to other pages so we can go through
+            # several pages, as each date is its own page.
+            filename = li.a[
+                'href']  # find_next('a').get('href') #Go to each 'a' html tag and get the url, return string that is the file name
+
+            # check if the last 6 items in file name are in the strings we want
+            if filename[-6:] in list_of_file_suffix:
+                print('---- Downloading: {}'.format(filename))
+                response = requests.get(scene.download_url.replace('index.html', filename),
+                                        stream=True)  # replace the index.html part of the url with the filename
+
+                # Download the files
+                # code from: https://stackoverflow.com/a/18043472/5361345
+
+                with open(os.path.join(storeInFolder, filename), 'wb') as output:
+                    shutil.copyfileobj(response.raw, output)
+                del response
+
+
+# -------------------------------------------------- NDVI computation --------------------------------------------------
+import numpy as np
+import matplotlib.pyplot as plt
+import base64
+from io import BytesIO
+import os
+
+
+def get_graph():
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png')
+    buffer.seek(0)
+    image_png = buffer.getvalue()
+    graph = base64.b64encode(image_png)
+    graph = graph.decode('utf-8')
+    buffer.close()
+    return graph
+
+
+def compute_NDVI(path):
+    print('---- Computing NDVI')
+
+    # Read the images using matplotlib
+    path_of_b4 = ""
+    path_of_b5 = ""
+
+    for item in os.listdir(path):
+        if item.endswith('B4.TIF'):
+            path_of_b4 = os.path.join(path, item)
+        if item.endswith('B5.TIF'):
+            path_of_b5 = os.path.join(path, item)
+    band4 = plt.imread(path_of_b4)
+    band5 = plt.imread(path_of_b5)
+
+    os.remove(path_of_b4)
+    os.remove(path_of_b5)
+
+    # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDVI calculation.
+    red = np.array(band4, dtype="int32")
+    nir = np.array(band5, dtype="int32")
+
+    # Calculate NDVI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+    numerator = np.subtract(nir, red)
+    denominator = np.add(red, nir)
+    ndvi = np.true_divide(numerator, denominator, where=denominator != 0)
+
+    # Truncate values below 0 to 0. Do this because the NDVI values below 0 are not important ecologically.
+    ndvi[ndvi < 0] = 0
+
+    # Turn 0s into nans to get clear background in the image
+    ndvi_nan = ndvi.copy()
+    ndvi_nan[np.where(abs(
+        red) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+    ndvi32 = ndvi_nan.astype("float32")
+
+    plt.switch_backend('AGG')
+    plt.title('NDVI')
+    mapPretty = plt.imshow(ndvi32, cmap="Greens")
+    mapPretty.set_clim(0, 1)
+    plt.colorbar(orientation='horizontal', fraction=0.03)
+    plt.axis('off')
+    graph = get_graph()
+    return graph
