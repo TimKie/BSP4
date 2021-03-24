@@ -1,8 +1,10 @@
 from django import forms
-from .models import Location
 
 
-class FindLocationForm(forms.ModelForm):
-    class Meta:
-        model = Location
-        fields = ('location',)
+class FindLocationForm(forms.Form):
+    location = forms.CharField(max_length=200, required=False)
+
+
+class LatLonForm(forms.Form):
+    latitude = forms.CharField(max_length=200, required=False)
+    longitude = forms.CharField(max_length=200, required=False)

@@ -1,120 +1,16 @@
-from django.shortcuts import render, get_object_or_404
-from .models import *
+from django.shortcuts import render
 from .forms import *
 from geopy.geocoders import Nominatim
 import folium
 from .utils import *
-
-
-def home(request):
-    form = FindLocationForm(request.POST or None)
-    geolocator = Nominatim(user_agent='satellite_data_processing')
-
-    # initial location which is displayed on the map
-    ip = get_ip_address(request)  # this code cannot be used when working with the localhost
-    ip = '2.56.107.255'  # so the ip address is overwritten with a static ip address for development
-    country, city, initial_location_lat, initial_location_lon = get_geoip(ip)
-
-    initial_location = geolocator.geocode(city)
-    initial_location_point = (initial_location_lat, initial_location_lon)
-
-    # initial folium map
-    m = folium.Map(width=900, height=600, location=initial_location_point)
-
-    # location marker
-    folium.Marker([initial_location_lat, initial_location_lon], tooltip='click here for more info',
-                  popup=initial_location, icon=folium.Icon(color='blue')).add_to(m)
-
-    if form.is_valid():
-        instance = form.save(commit=False)
-        location_ = form.cleaned_data.get('location')
-        location = geolocator.geocode(location_)
-
-        # location coordinates
-        location_lat = location.latitude
-        location_lon = location.longitude
-        location_point = (location_lat, location_lon)
-
-        # folium map modification
-        m = folium.Map(width=900, height=600, location=location_point)
-
-        # new location marker
-        folium.Marker([location_lat, location_lon], tooltip='click here for more info',
-                      popup=location, icon=folium.Icon(color='blue')).add_to(m)
-
-        # instance.save()
-
-    # transform the map into html code
-    m = m._repr_html_()
-
-    context = {
-        'form': form,
-        'map': m,
-    }
-
-    return render(request, 'home.html', context)
-
-
-def about(request):
-    return render(request, 'about.html', {'title': 'About'})
-
-
-# --------------------------------------- AWS Test ---------------------------------------
-import pandas as pd
-
-
-def aws_test(request):
-    form = FindLocationForm(request.POST or None)
-    geolocator = Nominatim(user_agent='satellite_data_processing')
-
-    # initialize data when form is not valid
-    location_lat = 0
-    location_lon = 0
-    path = 0
-    row = 0
-    scene = ""
-
-    if form.is_valid():
-        instance = form.save(commit=False)
-        location_ = form.cleaned_data.get('location')
-        location = geolocator.geocode(location_)
-
-        # location coordinates
-        location_lat = location.latitude
-        location_lon = location.longitude
-        location_point = (location_lat, location_lon)
-
-        path, row = get_row_path(location_lat, location_lon)
-
-        # get scenes for row and path
-        all_scenes = pd.read_csv('scene_list.gz', compression='gzip')
-        scenes = all_scenes[(all_scenes.path == path) & (all_scenes.row == row) &
-                            (~all_scenes.productId.str.contains('_T2')) &
-                            (~all_scenes.productId.str.contains('_RT'))]
-        scene = scenes.sort_values('cloudCover').iloc[0]
-
-        #scene.to_csv("scenes_lux.csv")
-
-    context = {
-        'form': form,
-        'lat': location_lat,
-        'lon': location_lon,
-        'path': path,
-        'row': row,
-        'scene': scene,
-    }
-
-    return render(request, 'aws.html', context)
-
-
-# --------------------------------------- Google Earth Engine ---------------------------------------
-# code from https://github.com/giswqs/qgis-earthengine-examples/blob/master/Folium/ee-api-folium-setup.ipynb
 import ee
 from folium import plugins
 
 
-def earth_engine_view(request):
-    form = FindLocationForm(request.POST or None)
+def home(request):
+    form_location = FindLocationForm(request.POST or None)
+    form_lat_lon = LatLonForm(request.POST or None)
+
     geolocator = Nominatim(user_agent='satellite_data_processing')
 
     # initial location which is displayed on the map
@@ -132,9 +28,8 @@ def earth_engine_view(request):
     folium.Marker([initial_location_lat, initial_location_lon], tooltip='click here for more info',
                   popup=initial_location, icon=folium.Icon(color='blue')).add_to(m)
 
-    if form.is_valid():
-        instance = form.save(commit=False)
-        location_ = form.cleaned_data.get('location')
+    if form_location.is_valid():
+        location_ = form_location.cleaned_data.get('location')
         location = geolocator.geocode(location_)
 
         # location coordinates
@@ -149,7 +44,17 @@ def earth_engine_view(request):
         folium.Marker([location_lat, location_lon], tooltip='click here for more info',
                       popup=location, icon=folium.Icon(color='blue')).add_to(m)
 
-        # instance.save()
+    if form_lat_lon.is_valid():
+        lon = form_lat_lon.cleaned_data.get('longitude')
+        lat = form_lat_lon.cleaned_data.get('latitude')
+        location_point = (lat, lon)
+
+        # folium map modification
+        m = folium.Map(location=location_point)
+
+        # new location marker
+        folium.Marker([lat, lon], icon=folium.Icon(color='blue')).add_to(m)
+
 
     # Add custom basemaps to folium
     basemaps = {
@@ -219,8 +124,60 @@ def earth_engine_view(request):
     m = m._repr_html_()
 
     context = {
-        'form': form,
+        'form_location': form_location,
+        'form_lat_lon': form_lat_lon,
         'map': m,
     }
 
-    return render(request, 'earth_engine.html', context)
+    return render(request, 'home.html', context)
+
+
+def about(request):
+    return render(request, 'about.html', {'title': 'About'})
+
+
+# --------------------------------------- AWS Test ---------------------------------------
+import pandas as pd
+
+
+def aws_test(request):
+    form = FindLocationForm(request.POST or None)
+    geolocator = Nominatim(user_agent='satellite_data_processing')
+
+    # initialize data when form is not valid
+    location_lat = 0
+    location_lon = 0
+    path = 0
+    row = 0
+    scene = ""
+
+    if form.is_valid():
+        location_ = form.cleaned_data.get('location')
+        location = geolocator.geocode(location_)
+
+        # location coordinates
+        location_lat = location.latitude
+        location_lon = location.longitude
+        location_point = (location_lat, location_lon)
+
+        path, row = get_row_path(location_lat, location_lon)
+
+        # get scenes for row and path
+        all_scenes = pd.read_csv('scene_list.gz', compression='gzip')
+        scenes = all_scenes[(all_scenes.path == path) & (all_scenes.row == row) &
+                            (~all_scenes.productId.str.contains('_T2')) &
+                            (~all_scenes.productId.str.contains('_RT'))]
+        scene = scenes.sort_values('cloudCover').iloc[0]
+
+        #scene.to_csv("scenes_lux.csv")
+
+    context = {
+        'form': form,
+        'lat': location_lat,
+        'lon': location_lon,
+        'path': path,
+        'row': row,
+        'scene': scene,
+    }
+
+    return render(request, 'aws.html', context)
