@@ -141,48 +141,98 @@ import pandas as pd
 
 
 def aws_test(request):
-    form = FindLocationForm(request.POST or None)
+    location_form = FindLocationForm(request.POST or None)
+    date_form = DatePickerForm(request.POST or None)
+
     geolocator = Nominatim(user_agent='satellite_data_processing')
 
-    # initialize data when form is not valid
+
+# -------------- initialize data when form is not valid --------------
     location_lat = 0
     location_lon = 0
+    starting_date = 0
+    ending_date = 0
     path = 0
     row = 0
-    scene = ""
+    selected_scene = ""
     ndvi_img = 0
+    ndwi_img = 0
+    s = 0
 
-    if form.is_valid():
-        location_ = form.cleaned_data.get('location')
+
+# -------------- processing when form is valid (user entered location and/or date range) --------------
+    if date_form.is_valid():
+        starting_date = date_form.cleaned_data.get('starting_date')
+        ending_date = date_form.cleaned_data.get('ending_date')
+
+    if location_form.is_valid():
+        location_ = location_form.cleaned_data.get('location')
         location = geolocator.geocode(location_)
 
-        # location coordinates
-        location_lat = location.latitude
-        location_lon = location.longitude
-        location_point = (location_lat, location_lon)
+        if location is not None:
+            # location coordinates
+            location_lat = location.latitude
+            location_lon = location.longitude
 
-        path, row = get_row_path(location_lat, location_lon)
+            path, row = get_row_path(location_lat, location_lon)
 
-        # get scenes for row and path
-        all_scenes = pd.read_csv('scene_list.gz', compression='gzip')
-        scenes = all_scenes[(all_scenes.path == path) & (all_scenes.row == row) &
-                            (~all_scenes.productId.str.contains('_T2')) &
-                            (~all_scenes.productId.str.contains('_RT'))]
-        scene = scenes.sort_values('cloudCover').iloc[0]
+            # get scenes for row and path
+            all_scenes = pd.read_csv('scene_list.gz', compression='gzip')
+            scenes = all_scenes[(all_scenes.path == path) & (all_scenes.row == row) &
+                                (~all_scenes.productId.str.contains('_T2')) &
+                                (~all_scenes.productId.str.contains('_RT'))]
 
-        # save data of band 4 and band 5
-        get_bands_data(scene, ['B4.TIF', 'B5.TIF'])
+            # get only the scenes within the dat range if a dat range is entered
+            if (starting_date is not None) and (ending_date is not None):
+                starting_date = str(starting_date)
+                ending_date = str(ending_date)
 
-        ndvi_img = compute_NDVI('./L8_raw_data')
+                scenes = scenes.loc[(scenes['acquisitionDate'] > starting_date) & (scenes['acquisitionDate'] <= ending_date)]
 
+            s = scenes.sort_values('acquisitionDate')
+
+            s.to_csv("./scenes_in_date_range.csv")
+
+
+# -------------- After scene is selected --------------
+    if request.method == 'POST':
+        scene_productId = request.POST.get('submit_scene')
+        if scene_productId is not None:
+            scenes_csv = pd.read_csv('scenes_in_date_range.csv')
+            selected_scene = scenes_csv.loc[scenes_csv['productId'] == scene_productId].iloc[0]
+
+            # I somehow have to store the location after pressing the "Find" button such that I can afterwards
+            # (after the user selected the scene and the page is refreshed) pass this location to the mask_bands function
+            location_ = location_form.cleaned_data.get('location')
+            print("--------------- location_:", location_)
+
+            # download data of band 4 and band 5
+            get_bands_data(selected_scene, ['B4.TIF', 'B5.TIF', 'B6.TIF'])
+
+            # masking the bands that were downloaded previously
+            mask_bands('Luxembourg')
+
+            # computing the NDVI
+            ndvi_img = compute_NDVI('./L8_raw_data')
+
+            # computing the NDWI
+            ndwi_img = compute_NDWI('./L8_raw_data')
+
+
+# -------------- Variables passed to the template --------------
     context = {
-        'form': form,
+        'location_form': location_form,
+        'date_form': date_form,
         'lat': location_lat,
         'lon': location_lon,
+        'starting_date': starting_date,
+        'ending_date': ending_date,
         'path': path,
         'row': row,
-        'scene': scene,
+        'scene': selected_scene,
         'ndvi_img': ndvi_img,
+        'ndwi_img': ndwi_img,
+        'scenes': s
     }
 
     return render(request, 'aws.html', context)
