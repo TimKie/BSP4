@@ -134,7 +134,7 @@ def get_row_path(lat, lon):
 # ---------------------------------------------------- AWS get data ----------------------------------------------------
 import requests
 from bs4 import BeautifulSoup
-import os, shutil
+import shutil
 
 
 def get_bands_data(scene, list_of_file_suffix):
@@ -229,92 +229,87 @@ def get_graph():
     return graph
 
 
-def compute_NDVI(path):
-    print('---- Computing NDVI')
+def compute_indicator(path, indicator):
+    # initialize graph (overwritten after computation)
+    graph = ""
 
     # Read the images using matplotlib
     path_of_b4 = ""
     path_of_b5 = ""
+    path_of_b6 = ""
 
     for item in os.listdir(path):
         if item.endswith('B4.TIF'):
             path_of_b4 = os.path.join(path, item)
         if item.endswith('B5.TIF'):
             path_of_b5 = os.path.join(path, item)
-    band4 = plt.imread(path_of_b4)
-    band5 = plt.imread(path_of_b5)
-
-    os.remove(path_of_b4)
-    #os.remove(path_of_b5) cannot delete it here as it is needed for the NDWI computation
-
-    # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDVI calculation.
-    red = np.array(band4, dtype="int32")
-    nir = np.array(band5, dtype="int32")
-
-    # Calculate NDVI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
-    numerator = np.subtract(nir, red)
-    denominator = np.add(red, nir)
-    ndvi = np.true_divide(numerator, denominator, where=denominator != 0)
-
-    # Truncate values below 0 to 0. Do this because the NDVI values below 0 are not important ecologically.
-    ndvi[ndvi < 0] = 0
-
-    # Turn 0s into nans to get clear background in the image
-    ndvi_nan = ndvi.copy()
-    ndvi_nan[np.where(abs(red) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
-    ndvi32 = ndvi_nan.astype("float32")
-
-    plt.switch_backend('AGG')
-    plt.title('NDVI')
-    mapPretty = plt.imshow(ndvi32, cmap="Greens")
-    mapPretty.set_clim(0, 1)
-    plt.colorbar(orientation='horizontal', fraction=0.03)
-    plt.axis('off')
-    graph = get_graph()
-    return graph
-
-
-# -------------------------------------------------- NDWI computation --------------------------------------------------
-def compute_NDWI(path):
-    print('---- Computing NDWI')
-
-    # Read the images using matplotlib
-    path_of_b5 = ""
-    path_of_b6 = ""
-
-    for item in os.listdir(path):
-        if item.endswith('B5.TIF'):
-            path_of_b5 = os.path.join(path, item)
         if item.endswith('B6.TIF'):
             path_of_b6 = os.path.join(path, item)
+    band4 = plt.imread(path_of_b4)
     band5 = plt.imread(path_of_b5)
     band6 = plt.imread(path_of_b6)
 
+    # selecting the right computation according to the selected indicator by the user
+    if indicator == 'NDVI':
+        print('---- Computing NDVI')
+
+        # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDVI calculation.
+        red = np.array(band4, dtype="int32")
+        nir = np.array(band5, dtype="int32")
+
+        # Calculate NDVI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+        numerator = np.subtract(nir, red)
+        denominator = np.add(red, nir)
+        ndvi = np.true_divide(numerator, denominator, where=denominator != 0)
+
+        # Truncate values below 0 to 0. Do this because the NDVI values below 0 are not important ecologically.
+        ndvi[ndvi < 0] = 0
+
+        # Turn 0s into nans to get clear background in the image
+        ndvi_nan = ndvi.copy()
+        ndvi_nan[np.where(abs(red) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+        ndvi32 = ndvi_nan.astype("float32")
+
+        plt.switch_backend('AGG')
+        plt.title('NDVI')
+        mapPretty = plt.imshow(ndvi32, cmap="Greens")
+        mapPretty.set_clim(0, 1)
+        plt.colorbar(orientation='horizontal', fraction=0.03)
+        plt.axis('off')
+        graph = get_graph()
+
+# -------------------------------------------------- NDWI computation --------------------------------------------------
+    elif indicator == 'NDWI':
+        print('---- Computing NDWI')
+
+        # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDWI calculation.
+        nir = np.array(band5, dtype="int32")
+        swir = np.array(band6, dtype="int32")
+
+        # Calculate NDWI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+        numerator = np.subtract(nir, swir)
+        denominator = np.add(swir, nir)
+        ndwi = np.true_divide(numerator, denominator, where=denominator != 0)
+
+        # Truncate values below 0 to 0. Do this because the NDWI values below 0 are not important ecologically.
+        ndwi[ndwi < 0] = 0
+
+        # Turn 0s into nans to get clear background in the image
+        ndwi_nan = ndwi.copy()
+        ndwi_nan[np.where(abs(swir) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+        ndwi32 = ndwi_nan.astype("float32")
+
+        plt.switch_backend('AGG')
+        plt.title('NDWI')
+        mapPretty = plt.imshow(ndwi32, cmap="Blues")
+        mapPretty.set_clim(0, 1)
+        plt.colorbar(orientation='horizontal', fraction=0.03)
+        plt.axis('off')
+        graph = get_graph()
+
+    # deleting the bands downloaded before as they are not needed anymore
+    os.remove(path_of_b4)
     os.remove(path_of_b5)
     os.remove(path_of_b6)
 
-    # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDWI calculation.
-    nir = np.array(band5, dtype="int32")
-    swir = np.array(band6, dtype="int32")
-
-    # Calculate NDWI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
-    numerator = np.subtract(nir, swir)
-    denominator = np.add(swir, nir)
-    ndwi = np.true_divide(numerator, denominator, where=denominator != 0)
-
-    # Truncate values below 0 to 0. Do this because the NDWI values below 0 are not important ecologically.
-    ndwi[ndwi < 0] = 0
-
-    # Turn 0s into nans to get clear background in the image
-    ndwi_nan = ndwi.copy()
-    ndwi_nan[np.where(abs(swir) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
-    ndwi32 = ndwi_nan.astype("float32")
-
-    plt.switch_backend('AGG')
-    plt.title('NDWI')
-    mapPretty = plt.imshow(ndwi32, cmap="Blues")
-    mapPretty.set_clim(0, 1)
-    plt.colorbar(orientation='horizontal', fraction=0.03)
-    plt.axis('off')
-    graph = get_graph()
     return graph

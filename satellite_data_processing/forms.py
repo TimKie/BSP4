@@ -1,8 +1,12 @@
 from django import forms
+from .models import *
 
 
-class FindLocationForm(forms.Form):
-    location = forms.CharField(max_length=200, required=False)
+class FindLocationForm(forms.ModelForm):
+    class Meta:
+        model = Location
+        fields = ('location',)
+    #location = forms.CharField(max_length=200, required=False)
 
 
 class DateInput(forms.DateInput):
@@ -17,3 +21,15 @@ class DatePickerForm(forms.Form):
 class LatLonForm(forms.Form):
     latitude = forms.CharField(max_length=200, required=False)
     longitude = forms.CharField(max_length=200, required=False)
+
+
+class IndicatorChoiceForm(forms.ModelForm):
+    class Meta:
+        model = Indicator
+        fields = ('indicator',)
+
+        CHOICES = [('NDVI', 'NDVI'), ('NDWI', 'NDWI')]
+
+        widgets = {
+            'indicator': forms.Select(choices=CHOICES, attrs={'class': 'form-control'}),
+        }

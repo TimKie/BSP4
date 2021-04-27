@@ -138,11 +138,13 @@ def about(request):
 
 # --------------------------------------- AWS Test ---------------------------------------
 import pandas as pd
+from .models import *
 
 
 def aws_test(request):
     location_form = FindLocationForm(request.POST or None)
     date_form = DatePickerForm(request.POST or None)
+    indicator_choices_form = IndicatorChoiceForm(request.POST or None)
 
     geolocator = Nominatim(user_agent='satellite_data_processing')
 
@@ -154,13 +156,17 @@ def aws_test(request):
     ending_date = 0
     path = 0
     row = 0
-    selected_scene = ""
+    selected_scene = 0
     ndvi_img = 0
     ndwi_img = 0
     s = 0
 
 
-# -------------- processing when form is valid (user entered location and/or date range) --------------
+# -------------- processing when forms are valid (user entered location and/or date range) --------------
+    if indicator_choices_form.is_valid():
+        indicator = indicator_choices_form.cleaned_data.get('choices')
+        indicator_choices_form.save()
+
     if date_form.is_valid():
         starting_date = date_form.cleaned_data.get('starting_date')
         ending_date = date_form.cleaned_data.get('ending_date')
@@ -168,6 +174,8 @@ def aws_test(request):
     if location_form.is_valid():
         location_ = location_form.cleaned_data.get('location')
         location = geolocator.geocode(location_)
+
+        location_form.save()
 
         if location is not None:
             # location coordinates
@@ -201,28 +209,33 @@ def aws_test(request):
             scenes_csv = pd.read_csv('scenes_in_date_range.csv')
             selected_scene = scenes_csv.loc[scenes_csv['productId'] == scene_productId].iloc[0]
 
-            # I somehow have to store the location after pressing the "Find" button such that I can afterwards
-            # (after the user selected the scene and the page is refreshed) pass this location to the mask_bands function
-            location_ = location_form.cleaned_data.get('location')
-            print("--------------- location_:", location_)
+            # Fetch the location from the database
+            location = Location.objects.all().values('location')[0]['location']
+            print("------------ location:", str(location))
+
+            # Fetch the selected indicator from the database
+            indicator = Indicator.objects.all().values('indicator')[0]['indicator']
+            print("------------ indicator:", indicator)
 
             # download data of band 4 and band 5
             get_bands_data(selected_scene, ['B4.TIF', 'B5.TIF', 'B6.TIF'])
 
             # masking the bands that were downloaded previously
-            mask_bands('Luxembourg')
+            mask_bands(str(location))
 
-            # computing the NDVI
-            ndvi_img = compute_NDVI('./L8_raw_data')
+            # computing the corresponding indicator
+            ndvi_img = compute_indicator('./L8_raw_data', str(indicator))
 
-            # computing the NDWI
-            ndwi_img = compute_NDWI('./L8_raw_data')
+            # delete all entries in the database tables as they are not needed anymore
+            Location.objects.all().delete()
+            Indicator.objects.all().delete()
 
 
 # -------------- Variables passed to the template --------------
     context = {
         'location_form': location_form,
         'date_form': date_form,
+        'indicator_choices_form': indicator_choices_form,
         'lat': location_lat,
         'lon': location_lon,
         'starting_date': starting_date,
