@@ -7,4 +7,5 @@ earthengine-api~=0.1.254
 pandas
 rasterio
 geopandas
+osgeo
 gdal

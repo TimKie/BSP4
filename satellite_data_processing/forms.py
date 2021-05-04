@@ -28,7 +28,13 @@ class IndicatorChoiceForm(forms.ModelForm):
         model = Indicator
         fields = ('indicator',)
 
-        CHOICES = [('NDVI', 'NDVI'), ('NDWI', 'NDWI')]
+        CHOICES = [
+            ('NDVI', 'Normalized Difference Vegetation Index'),
+            ('NDWI', 'Normalized Difference Water Index'),
+            ('NDSI', 'Normalized Difference Soil Index'),
+            ('NDRE', 'Normalized Difference Red Edge'),
+            ('SLAVI', 'Specific Leaf Area Vegetation Index')
+        ]
 
         widgets = {
             'indicator': forms.Select(choices=CHOICES, attrs={'class': 'form-control'}),

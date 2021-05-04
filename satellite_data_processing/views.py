@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from .forms import *
 from geopy.geocoders import Nominatim
 import folium
@@ -7,7 +7,148 @@ import ee
 from folium import plugins
 
 
-def home(request):
+# ------------------------------------------- AWS -------------------------------------------
+import pandas as pd
+from .models import *
+
+
+def aws(request):
+    location_form = FindLocationForm(request.POST or None)
+    date_form = DatePickerForm(request.POST or None)
+    indicator_choices_form = IndicatorChoiceForm(request.POST or None)
+
+    geolocator = Nominatim(user_agent='satellite_data_processing')
+
+
+# -------------- initialize data when form is not valid --------------
+    location_lat = 0
+    location_lon = 0
+    starting_date = 0
+    ending_date = 0
+    list_of_path_and_rows = 0
+    selected_scene = 0
+    img = 0
+    s = 0
+
+
+# -------------- processing when forms are valid (user entered location and/or date range) --------------
+    if indicator_choices_form.is_valid():
+        indicator = indicator_choices_form.cleaned_data.get('choices')
+        indicator_choices_form.save()
+
+    if date_form.is_valid():
+        starting_date = date_form.cleaned_data.get('starting_date')
+        ending_date = date_form.cleaned_data.get('ending_date')
+
+    if location_form.is_valid():
+        location_ = location_form.cleaned_data.get('location')
+        location = geolocator.geocode(location_)
+
+        location_form.save()
+
+        if location is not None:
+            # location coordinates
+            location_lat = location.latitude
+            location_lon = location.longitude
+
+            # get all paths an rows of the location
+            list_of_path_and_rows = get_path_row(location_lat, location_lon)
+            print("---- list_of_path_and_rows:", list_of_path_and_rows)
+
+            list_of_scenes = []
+            # get all the scenes for the rows and paths
+            for item in list_of_path_and_rows:
+                path = item[0]
+                row = item[1]
+                all_scenes = pd.read_csv('scene_list.gz', compression='gzip')
+                scenes = all_scenes[(all_scenes.path == path) & (all_scenes.row == row) &
+                                    (~all_scenes.productId.str.contains('_T2')) &
+                                    (~all_scenes.productId.str.contains('_RT'))]
+                list_of_scenes.append(scenes)
+            scenes = pd.concat(list_of_scenes)
+
+            # get only the scenes within the dat range if a date range is entered
+            if (starting_date is not None) and (ending_date is not None):
+                starting_date = str(starting_date)
+                ending_date = str(ending_date)
+
+                scenes = scenes.loc[(scenes['acquisitionDate'] > starting_date) & (scenes['acquisitionDate'] <= ending_date)]
+
+            s = scenes.sort_values('acquisitionDate')
+
+            s.to_csv("./scenes_in_date_range.csv")
+
+
+# -------------- After scene is selected --------------
+    if request.method == 'POST':
+        scene_productId = request.POST.get('submit_scene')
+        if scene_productId is not None:
+            scenes_csv = pd.read_csv('scenes_in_date_range.csv')
+            selected_scene = scenes_csv.loc[scenes_csv['productId'] == scene_productId]
+
+            selected_scene.to_csv("./selected_scenes_in_date_range.csv")
+
+            return redirect('aws_img')
+
+
+# -------------- Variables passed to the template --------------
+    context = {
+        'location_form': location_form,
+        'date_form': date_form,
+        'indicator_choices_form': indicator_choices_form,
+        'lat': location_lat,
+        'lon': location_lon,
+        'starting_date': starting_date,
+        'ending_date': ending_date,
+        'list_of_path_and_rows': list_of_path_and_rows,
+        'scene': selected_scene,
+        'img': img,
+        'scenes': s
+    }
+
+    return render(request, 'aws.html', context)
+
+
+# ------------------------------------------- AWS IMG -------------------------------------------
+def aws_img(request):
+    selected_scene = pd.read_csv('selected_scenes_in_date_range.csv').iloc[0]
+
+    # Fetch the location from the database
+    location = Location.objects.all().values('location')[0]['location']
+    print("------------ location:", str(location))
+
+    # Fetch the selected indicator from the database
+    indicator = Indicator.objects.all().values('indicator')[0]['indicator']
+    print("------------ indicator:", indicator)
+
+    # download data of band 4 and band 5
+    get_bands_data(selected_scene, ['B4.TIF', 'B5.TIF', 'B6.TIF', 'B7.TIF'])
+
+    # masking the bands that were downloaded previously
+    mask_bands(str(location))
+
+    # computing the corresponding indicator
+    img = compute_indicator('./L8_raw_data', str(indicator))
+
+    # delete all entries in the database tables as they are not needed anymore
+    Location.objects.all().delete()
+    Indicator.objects.all().delete()
+
+    context = {
+        'scene': selected_scene,
+        'img': img
+    }
+
+    return render(request, 'aws_img.html', context)
+
+
+# ------------------------------------------- ABOUT -------------------------------------------
+def about(request):
+    return render(request, 'about.html', {'title': 'About'})
+
+
+# ------------------------------------------- GEE -------------------------------------------
+def google_earth_engine(request):
     form_location = FindLocationForm(request.POST or None)
     form_lat_lon = LatLonForm(request.POST or None)
 
@@ -129,123 +270,4 @@ def home(request):
         'map': m,
     }
 
-    return render(request, 'home.html', context)
-
-
-def about(request):
-    return render(request, 'about.html', {'title': 'About'})
-
-
-# --------------------------------------- AWS Test ---------------------------------------
-import pandas as pd
-from .models import *
-
-
-def aws_test(request):
-    location_form = FindLocationForm(request.POST or None)
-    date_form = DatePickerForm(request.POST or None)
-    indicator_choices_form = IndicatorChoiceForm(request.POST or None)
-
-    geolocator = Nominatim(user_agent='satellite_data_processing')
-
-
-# -------------- initialize data when form is not valid --------------
-    location_lat = 0
-    location_lon = 0
-    starting_date = 0
-    ending_date = 0
-    path = 0
-    row = 0
-    selected_scene = 0
-    ndvi_img = 0
-    ndwi_img = 0
-    s = 0
-
-
-# -------------- processing when forms are valid (user entered location and/or date range) --------------
-    if indicator_choices_form.is_valid():
-        indicator = indicator_choices_form.cleaned_data.get('choices')
-        indicator_choices_form.save()
-
-    if date_form.is_valid():
-        starting_date = date_form.cleaned_data.get('starting_date')
-        ending_date = date_form.cleaned_data.get('ending_date')
-
-    if location_form.is_valid():
-        location_ = location_form.cleaned_data.get('location')
-        location = geolocator.geocode(location_)
-
-        location_form.save()
-
-        if location is not None:
-            # location coordinates
-            location_lat = location.latitude
-            location_lon = location.longitude
-
-            path, row = get_row_path(location_lat, location_lon)
-
-            # get scenes for row and path
-            all_scenes = pd.read_csv('scene_list.gz', compression='gzip')
-            scenes = all_scenes[(all_scenes.path == path) & (all_scenes.row == row) &
-                                (~all_scenes.productId.str.contains('_T2')) &
-                                (~all_scenes.productId.str.contains('_RT'))]
-
-            # get only the scenes within the dat range if a dat range is entered
-            if (starting_date is not None) and (ending_date is not None):
-                starting_date = str(starting_date)
-                ending_date = str(ending_date)
-
-                scenes = scenes.loc[(scenes['acquisitionDate'] > starting_date) & (scenes['acquisitionDate'] <= ending_date)]
-
-            s = scenes.sort_values('acquisitionDate')
-
-            s.to_csv("./scenes_in_date_range.csv")
-
-
-# -------------- After scene is selected --------------
-    if request.method == 'POST':
-        scene_productId = request.POST.get('submit_scene')
-        if scene_productId is not None:
-            scenes_csv = pd.read_csv('scenes_in_date_range.csv')
-            selected_scene = scenes_csv.loc[scenes_csv['productId'] == scene_productId].iloc[0]
-
-            # Fetch the location from the database
-            location = Location.objects.all().values('location')[0]['location']
-            print("------------ location:", str(location))
-
-            # Fetch the selected indicator from the database
-            indicator = Indicator.objects.all().values('indicator')[0]['indicator']
-            print("------------ indicator:", indicator)
-
-            # download data of band 4 and band 5
-            get_bands_data(selected_scene, ['B4.TIF', 'B5.TIF', 'B6.TIF'])
-
-            # masking the bands that were downloaded previously
-            mask_bands(str(location))
-
-            # computing the corresponding indicator
-            ndvi_img = compute_indicator('./L8_raw_data', str(indicator))
-
-            # delete all entries in the database tables as they are not needed anymore
-            Location.objects.all().delete()
-            Indicator.objects.all().delete()
-
-
-# -------------- Variables passed to the template --------------
-    context = {
-        'location_form': location_form,
-        'date_form': date_form,
-        'indicator_choices_form': indicator_choices_form,
-        'lat': location_lat,
-        'lon': location_lon,
-        'starting_date': starting_date,
-        'ending_date': ending_date,
-        'path': path,
-        'row': row,
-        'scene': selected_scene,
-        'ndvi_img': ndvi_img,
-        'ndwi_img': ndwi_img,
-        'scenes': s
-    }
-
-    return render(request, 'aws.html', context)
+    return render(request, 'google_earth_engine.html', context)

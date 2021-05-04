@@ -30,17 +30,19 @@
         <tr>
           <th scope="col">Longitude</th>
           <th scope="col">Latitude</th>
-          <th scope="col">Row</th>
           <th scope="col">Path</th>
+          <th scope="col">Row</th>
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td>{{ lon }}</td>
-          <td>{{ lat }}</td>
-          <td>{{ row }}</td>
-          <td>{{ path }}</td>
-        </tr>
+         {% for item in list_of_path_and_rows %}
+            <tr>
+                <td>{{ lon }}</td>
+                <td>{{ lat }}</td>
+                <td>{{ item.0 }}</td>
+                <td>{{ item.1 }}</td>
+            </tr>
+        {% endfor %}
       </tbody>
     </table>
 
@@ -70,18 +72,6 @@
         {% endfor %}
       </tbody>
     </table>
-
-    <br>
-
-    <a href="{{ scene.download_url }}" target="_blank">Click here for more information</a>
-
-    <br>
-
-    <img src="data:image/png;base64, {{ ndvi_img|safe }}">
-
-    <br>
-
-    <img src="data:image/png;base64, {{ ndwi_img|safe }}">
 {% endif %}
 
 {% endblock content %}

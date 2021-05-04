@@ -105,7 +105,7 @@ zip_file.extractall("landsat-path-row")
 zip_file.close()
 
 
-def get_row_path(lat, lon):
+def get_path_row(lat, lon):
     shapefile = 'landsat-path-row/WRS2_descending.shp'
     wrs = osgeo.ogr.Open(shapefile)
     layer = wrs.GetLayer(0)
@@ -115,20 +115,24 @@ def get_row_path(lat, lon):
 
     def checkPoint(feature, point, mode):
         geom = feature.GetGeometryRef()  # Get geometry from feature
-        shape = shapely.wkt.loads(geom.ExportToWkt())  # Import geometry into shapely to easily work with our point
+        shape = shapely.wkt.loads(geom.ExportToWkt())  # Import geometry into shapely to easily work with the point
         if point.within(shape) and feature['MODE'] == mode:
             return True
         else:
             return False
 
+    # get all the paths and rows form the features intersecting with the point
+    list_of_paths_and_rows = []
     i = 0
-    while not checkPoint(layer.GetFeature(i), point, mode):
+    while layer.GetFeature(i) is not None:
+        if checkPoint(layer.GetFeature(i), point, mode):
+            feature = layer.GetFeature(i)
+            path = feature['PATH']
+            row = feature['ROW']
+            list_of_paths_and_rows.append((path, row))
         i += 1
-    feature = layer.GetFeature(i)
-    path = feature['PATH']
-    row = feature['ROW']
 
-    return path, row
+    return list_of_paths_and_rows
 
 
 # ---------------------------------------------------- AWS get data ----------------------------------------------------
@@ -179,24 +183,22 @@ import geopandas as gpd
 
 
 def mask_bands(location):
-    print("---- Masking the data with the corresponding shapefile")
-
     geoms = gpd.read_file('countries.geojson')
     geoms = geoms.loc[geoms['ADMIN'] == location]
 
     for filepath in glob.glob("./L8_raw_data/*"):
         # Opening file
-        print("-- Opening {}".format(filepath))
-        src_L8 = rasterio.open(filepath)
+        print("---- Masking: {}".format(filepath[14:]))
+        band = rasterio.open(filepath)
 
         # Changing CRS of GeoJson to the one of the bands
-        geoms = geoms.to_crs(src_L8.crs)
+        geoms = geoms.to_crs(band.crs)
 
         # Masking && cropping
-        out_image, out_transform = rasterio.mask.mask(src_L8, geoms.geometry, crop=True)
+        out_image, out_transform = rasterio.mask.mask(band, geoms.geometry, crop=True)
 
         # Metadata is copied from the source image to the output image
-        out_meta = src_L8.meta
+        out_meta = band.meta
 
         # Update the metadata of the image to reduce the shape to the size of the mask
         out_meta.update({"driver": "GTiff",
@@ -210,7 +212,7 @@ def mask_bands(location):
             dest.write(out_image)
 
 
-# -------------------------------------------------- NDVI computation --------------------------------------------------
+# ------------------------------------------------ Indicator computation -----------------------------------------------
 import numpy as np
 import matplotlib.pyplot as plt
 import base64
@@ -237,6 +239,7 @@ def compute_indicator(path, indicator):
     path_of_b4 = ""
     path_of_b5 = ""
     path_of_b6 = ""
+    path_of_b7 = ""
 
     for item in os.listdir(path):
         if item.endswith('B4.TIF'):
@@ -245,11 +248,15 @@ def compute_indicator(path, indicator):
             path_of_b5 = os.path.join(path, item)
         if item.endswith('B6.TIF'):
             path_of_b6 = os.path.join(path, item)
+        if item.endswith('B7.TIF'):
+            path_of_b7 = os.path.join(path, item)
     band4 = plt.imread(path_of_b4)
     band5 = plt.imread(path_of_b5)
     band6 = plt.imread(path_of_b6)
+    band7 = plt.imread(path_of_b7)
 
     # selecting the right computation according to the selected indicator by the user
+# ----------------------------- NDVI (Normalized Difference Vegetation Index) computation ------------------------------
     if indicator == 'NDVI':
         print('---- Computing NDVI')
 
@@ -278,7 +285,7 @@ def compute_indicator(path, indicator):
         plt.axis('off')
         graph = get_graph()
 
-# -------------------------------------------------- NDWI computation --------------------------------------------------
+# -------------------------------- NDWI (Normalized Difference Water Index) computation --------------------------------
     elif indicator == 'NDWI':
         print('---- Computing NDWI')
 
@@ -307,9 +314,97 @@ def compute_indicator(path, indicator):
         plt.axis('off')
         graph = get_graph()
 
+# -------------------------------- NDSI (Normalized Difference Soil Index) computation ---------------------------------
+    elif indicator == 'NDSI':
+        print('---- Computing NDSI')
+
+        # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDSI calculation.
+        nir = np.array(band5, dtype="int32")
+        swir = np.array(band6, dtype="int32")
+
+        # Calculate NDSI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+        numerator = np.subtract(swir, nir)
+        denominator = np.add(swir, nir)
+        ndsi = np.true_divide(numerator, denominator, where=denominator != 0)
+
+        # Truncate values below 0 to 0. Do this because the NDSI values below 0 are not important ecologically.
+        ndsi[ndsi < 0] = 0
+
+        # Turn 0s into nans to get clear background in the image
+        ndsi_nan = ndsi.copy()
+        ndsi_nan[np.where(abs(nir) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+        ndsi32 = ndsi_nan.astype("float32")
+
+        plt.switch_backend('AGG')
+        plt.title('NDSI')
+        mapPretty = plt.imshow(ndsi32, cmap="YlOrBr")
+        mapPretty.set_clim(0, 1)
+        plt.colorbar(orientation='horizontal', fraction=0.03)
+        plt.axis('off')
+        graph = get_graph()
+
+# ------------------------------- SLAVI (Specific Leaf Area Vegetation Index) computation ------------------------------
+    elif indicator == 'SLAVI':
+        print('---- Computing SLAVI')
+
+        # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the SLAVI calculation.
+        red = np.array(band4, dtype="int32")
+        nir = np.array(band5, dtype="int32")
+        swir = np.array(band6, dtype="int32")
+
+        # Calculate SLAVI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+        numerator = nir
+        denominator = np.add(swir, red)
+        slavi = np.true_divide(numerator, denominator, where=denominator != 0)
+
+        # Truncate values below 0 to 0. Do this because the SLAVI values below 0 are not important ecologically.
+        slavi[slavi < 0] = 0
+
+        # Turn 0s into nans to get clear background in the image
+        slavi_nan = slavi.copy()
+        slavi_nan[np.where(abs(red) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+        slavi32 = slavi_nan.astype("float32")
+
+        plt.switch_backend('AGG')
+        plt.title('SLAVI')
+        mapPretty = plt.imshow(slavi32, cmap="YlGn")
+        mapPretty.set_clim(0, 1)
+        plt.colorbar(orientation='horizontal', fraction=0.03)
+        plt.axis('off')
+        graph = get_graph()
+
+# ---------------------------------- NDRE (Normalized Difference Red Edge) computation ---------------------------------
+    elif indicator == 'NDRE':
+        print('---- Computing NDRE')
+
+        # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDRE calculation.
+        nir = np.array(band5, dtype="int32")
+        swir2 = np.array(band7, dtype="int32")
+
+        # Calculate NDRE. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+        numerator = np.subtract(nir, swir2)
+        denominator = np.add(swir2, nir)
+        ndre = np.true_divide(numerator, denominator, where=denominator != 0)
+
+        # Truncate values below 0 to 0. Do this because the NDRE values below 0 are not important ecologically.
+        ndre[ndre < 0] = 0
+
+        # Turn 0s into nans to get clear background in the image
+        ndre_nan = ndre.copy()
+        ndre_nan[np.where(abs(nir) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+        ndre32 = ndre_nan.astype("float32")
+
+        plt.switch_backend('AGG')
+        plt.title('NDRE')
+        mapPretty = plt.imshow(ndre32, cmap="RdYlGn")
+        mapPretty.set_clim(0, 1)
+        plt.colorbar(orientation='horizontal', fraction=0.03)
+        plt.axis('off')
+        graph = get_graph()
+
     # deleting the bands downloaded before as they are not needed anymore
-    os.remove(path_of_b4)
-    os.remove(path_of_b5)
-    os.remove(path_of_b6)
+    bands = glob.glob('./L8_raw_data/*')
+    for band in bands:
+        os.remove(band)
 
     return graph
