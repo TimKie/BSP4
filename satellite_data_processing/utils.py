@@ -23,7 +23,7 @@ def get_geoip(ip):
     return country, city, lat, lon
 
 
-# --------------------------------------- Google Earth Engine ---------------------------------------
+# ------------------------------------------------- Google Earth Engine ------------------------------------------------
 # code from https://github.com/giswqs/qgis-earthengine-examples/blob/master/Folium/ee-api-folium-setup.ipynb
 import ee
 import folium

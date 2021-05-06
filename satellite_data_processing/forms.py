@@ -6,7 +6,6 @@ class FindLocationForm(forms.ModelForm):
     class Meta:
         model = Location
         fields = ('location',)
-    #location = forms.CharField(max_length=200, required=False)
 
 
 class DateInput(forms.DateInput):

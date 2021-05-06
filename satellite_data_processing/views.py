@@ -113,13 +113,13 @@ def aws(request):
 def aws_img(request):
     selected_scene = pd.read_csv('selected_scenes_in_date_range.csv').iloc[0]
 
-    # Fetch the location from the database
-    location = Location.objects.all().values('location')[0]['location']
+    # Fetch the latest location from the database
+    location = Location.objects.exclude(location__exact='').last().location
     print("------------ location:", str(location))
 
-    # Fetch the selected indicator from the database
-    indicator = Indicator.objects.all().values('indicator')[0]['indicator']
-    print("------------ indicator:", indicator)
+    # Fetch the latest indicator from the database
+    indicator = Indicator.objects.exclude(indicator__exact='').last().indicator
+    print("------------ indicator:", str(indicator))
 
     # download data of band 4 and band 5
     get_bands_data(selected_scene, ['B4.TIF', 'B5.TIF', 'B6.TIF', 'B7.TIF'])
