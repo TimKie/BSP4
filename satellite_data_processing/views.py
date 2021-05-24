@@ -27,7 +27,6 @@ def aws(request):
     ending_date = 0
     list_of_path_and_rows = 0
     selected_scene = 0
-    img = 0
     s = 0
 
 
@@ -102,7 +101,6 @@ def aws(request):
         'ending_date': ending_date,
         'list_of_path_and_rows': list_of_path_and_rows,
         'scene': selected_scene,
-        'img': img,
         'scenes': s
     }
 
@@ -121,7 +119,7 @@ def aws_img(request):
     indicator = Indicator.objects.exclude(indicator__exact='').last().indicator
     print("------------ indicator:", str(indicator))
 
-    # download data of band 4 and band 5
+    # download data of band 4, band 5, band 6 and band 7
     get_bands_data(selected_scene, ['B4.TIF', 'B5.TIF', 'B6.TIF', 'B7.TIF'])
 
     # masking the bands that were downloaded previously

@@ -159,8 +159,7 @@ def get_bands_data(scene, list_of_file_suffix):
 
             # Get the href tag - this links to other pages so we can go through
             # several pages, as each date is its own page.
-            filename = li.a[
-                'href']  # find_next('a').get('href') #Go to each 'a' html tag and get the url, return string that is the file name
+            filename = li.a['href']  # find_next('a').get('href') #Go to each 'a' html tag and get the url, return string that is the file name
 
             # check if the last 6 items in file name are in the strings we want
             if filename[-6:] in list_of_file_suffix:
