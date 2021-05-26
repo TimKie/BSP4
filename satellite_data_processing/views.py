@@ -1,10 +1,10 @@
 from django.shortcuts import render, redirect
 from .forms import *
 from geopy.geocoders import Nominatim
-import folium
 from .utils import *
 import ee
 from folium import plugins
+from os import path
 
 
 # ------------------------------------------- AWS -------------------------------------------
@@ -25,8 +25,8 @@ def aws(request):
     location_lon = 0
     starting_date = 0
     ending_date = 0
-    list_of_path_and_rows = 0
     selected_scene = 0
+    list_of_path_and_rows = []
     s = 0
 
 
@@ -73,7 +73,22 @@ def aws(request):
 
                 scenes = scenes.loc[(scenes['acquisitionDate'] > starting_date) & (scenes['acquisitionDate'] <= ending_date)]
 
+            # adding a column to the scenes dataframe which helps to get all the corresponding scenes after the user selects one scene
+            scenes_after_new_index = []
+            for i, item in enumerate(list_of_path_and_rows):
+                path = item[0]
+                row = item[1]
+                sc = scenes.loc[(scenes['path'] == path) & (scenes['row'] == row)]
+                sc['index_for_path_and_row'] = i
+                scenes_after_new_index.append(sc)
+
+            scenes = pd.concat(scenes_after_new_index)
+
             s = scenes.sort_values('acquisitionDate')
+            s.reset_index(drop=True, inplace=True)
+
+            # set the name of the index column to 'Index'
+            s.index.names = ['Index']
 
             s.to_csv("./scenes_in_date_range.csv")
 
@@ -85,7 +100,37 @@ def aws(request):
             scenes_csv = pd.read_csv('scenes_in_date_range.csv')
             selected_scene = scenes_csv.loc[scenes_csv['productId'] == scene_productId]
 
-            selected_scene.to_csv("./selected_scenes_in_date_range.csv")
+            list_of_idx = scenes_csv["Index"].to_list()
+
+            index_of_selected_scene = int(selected_scene['Index'])
+
+            # dict of distances between selected scene and other scenes in date range
+            dict_of_distances = dict()
+            for idx in list_of_idx:
+                distance = abs(idx - index_of_selected_scene)
+                dict_of_distances[idx] = distance
+
+            # sort dict of distances according to the values (distance)
+            dict_of_distances = dict(sorted(dict_of_distances.items(), key=lambda item: item[1]))
+            del dict_of_distances[index_of_selected_scene]
+
+            # get the scenes which are closest to the selected scene, but have a different path-row combination
+            list_of_final_scenes = []
+            idx_path_row_of_selected_scene = int(selected_scene['index_for_path_and_row'])
+            for idx, distance in dict_of_distances.items():
+                scene = scenes_csv.loc[scenes_csv['Index'] == idx]
+                idx_path_row_of_scene = int(scene['index_for_path_and_row'])
+                if idx_path_row_of_scene != idx_path_row_of_selected_scene:
+                    list_of_final_scenes.append(scene)
+
+            # concat all the corresponding scenes and only keep the first ones as they have the smallest distance
+            final_scenes = pd.concat(list_of_final_scenes)
+            final_scenes = final_scenes.drop_duplicates(subset='index_for_path_and_row', keep="first")
+
+            # concat the corresponding scenes with the initial scene selected by the user
+            final_scenes = pd.concat([final_scenes, selected_scene])
+
+            final_scenes.to_csv("./selected_scenes_in_date_range.csv")
 
             return redirect('aws_img')
 
@@ -109,7 +154,7 @@ def aws(request):
 
 # ------------------------------------------- AWS IMG -------------------------------------------
 def aws_img(request):
-    selected_scene = pd.read_csv('selected_scenes_in_date_range.csv').iloc[0]
+    selected_scenes = pd.read_csv('selected_scenes_in_date_range.csv')
 
     # Fetch the latest location from the database
     location = Location.objects.exclude(location__exact='').last().location
@@ -120,21 +165,30 @@ def aws_img(request):
     print("------------ indicator:", str(indicator))
 
     # download data of band 4, band 5, band 6 and band 7
-    get_bands_data(selected_scene, ['B4.TIF', 'B5.TIF', 'B6.TIF', 'B7.TIF'])
+    get_bands_data(selected_scenes, ['B4.TIF', 'B5.TIF', 'B6.TIF', 'B7.TIF'])
 
     # masking the bands that were downloaded previously
     mask_bands(str(location))
 
     # computing the corresponding indicator
-    img = compute_indicator('./L8_raw_data', str(indicator))
+    compute_indicator('./L8_raw_data/', str(indicator))
+
+    # creating the final image
+    plotting_image(str(location))
 
     # delete all entries in the database tables as they are not needed anymore
     Location.objects.all().delete()
     Indicator.objects.all().delete()
 
+    # deleting the bands downloaded before and tiff files computed previously as they are not needed anymore
+    for element in glob.glob('./L8_raw_data/*'):
+        if path.isfile(element):
+            os.remove(element)
+        elif path.isdir(element):
+            shutil.rmtree(element)
+
     context = {
-        'scene': selected_scene,
-        'img': img
+        'scenes': selected_scenes,
     }
 
     return render(request, 'aws_img.html', context)

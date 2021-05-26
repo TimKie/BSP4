@@ -1,2 +1,4 @@
-,Unnamed: 0,productId,entityId,acquisitionDate,cloudCover,processingLevel,path,row,min_lat,min_lon,max_lat,max_lon,download_url
-3,2233446,LC08_L1TP_194025_20210228_20210311_01_T1,LC81940252021059LGN00,2021-02-28 10:09:31.512962,0.13,L1TP,194,25,49.17766,9.01373,51.35137,12.22052,https://s3-us-west-2.amazonaws.com/landsat-pds/c1/L8/194/025/LC08_L1TP_194025_20210228_20210311_01_T1/index.html
+,Index,productId,entityId,acquisitionDate,cloudCover,processingLevel,path,row,min_lat,min_lon,max_lat,max_lon,download_url,index_for_path_and_row
+3,3,LC08_L1TP_195024_20130605_20170504_01_T1,LC81950242013156LGN01,2013-06-05 10:17:21.335464,16.35,L1TP,195,24,50.65066,8.00248,52.70391,11.34399,https://s3-us-west-2.amazonaws.com/landsat-pds/c1/L8/195/024/LC08_L1TP_195024_20130605_20170504_01_T1/index.html,2
+5,5,LC08_L1TP_194025_20130614_20170504_01_T1,LC81940252013165LGN01,2013-06-14 10:11:30.849481,64.79,L1TP,194,25,49.23751,9.03437,51.29472,12.2038,https://s3-us-west-2.amazonaws.com/landsat-pds/c1/L8/194/025/LC08_L1TP_194025_20130614_20170504_01_T1/index.html,1
+4,4,LC08_L1TP_194024_20130614_20170504_01_T1,LC81940242013165LGN01,2013-06-14 10:11:06.971152,64.03,L1TP,194,24,50.64297,9.59621,52.71186,12.85027,https://s3-us-west-2.amazonaws.com/landsat-pds/c1/L8/194/024/LC08_L1TP_194024_20130614_20170504_01_T1/index.html,0

@@ -141,38 +141,40 @@ from bs4 import BeautifulSoup
 import shutil
 
 
-def get_bands_data(scene, list_of_file_suffix):
-    # Request the html text of the download_url from the amazon server.
-    response = requests.get(scene.download_url)
+def get_bands_data(scenes, list_of_file_suffix):
+    for i, scene in scenes.iterrows():
+        # Request the html text of the download_url from the amazon server.
+        response = requests.get(scene.download_url)
 
-    # Check the status code works
-    if response.status_code == 200:
+        # Check the status code works
+        if response.status_code == 200:
 
-        # Import the html to beautiful soup
-        html = BeautifulSoup(response.content, 'html.parser')
+            # Import the html to beautiful soup
+            html = BeautifulSoup(response.content, 'html.parser')
 
-        # Create the directory to store the files
-        storeInFolder = './L8_raw_data'
+            # Create the dir where we will put this image files
+            entity_dir = os.path.join('./L8_raw_data', scene.productId)
+            os.makedirs(entity_dir, exist_ok=True)
 
-        # Second loop: for each band of this image that we find using the html <li> tag
-        for li in html.find_all('li'):
+            # Second loop: for each band of this image that we find using the html <li> tag
+            for li in html.find_all('li'):
 
-            # Get the href tag - this links to other pages so we can go through
-            # several pages, as each date is its own page.
-            filename = li.a['href']  # find_next('a').get('href') #Go to each 'a' html tag and get the url, return string that is the file name
+                # Get the href tag - this links to other pages so we can go through
+                # several pages, as each date is its own page.
+                filename = li.a['href']  # find_next('a').get('href') #Go to each 'a' html tag and get the url, return string that is the file name
 
-            # check if the last 6 items in file name are in the strings we want
-            if filename[-6:] in list_of_file_suffix:
-                print('---- Downloading: {}'.format(filename))
-                response = requests.get(scene.download_url.replace('index.html', filename),
-                                        stream=True)  # replace the index.html part of the url with the filename
+                # check if the last 6 items in file name are in the strings we want
+                if filename[-6:] in list_of_file_suffix:
+                    print('---- Downloading: {}'.format(filename))
+                    # replace the index.html part of the url with the filename
+                    response = requests.get(scene.download_url.replace('index.html', filename), stream=True)
 
-                # Download the files
-                # code from: https://stackoverflow.com/a/18043472/5361345
+                    # Download the files
+                    # code from: https://stackoverflow.com/a/18043472/5361345
 
-                with open(os.path.join(storeInFolder, filename), 'wb') as output:
-                    shutil.copyfileobj(response.raw, output)
-                del response
+                    with open(os.path.join(entity_dir, filename), 'wb') as output:
+                        shutil.copyfileobj(response.raw, output)
+                    del response
 
 
 # ----------------------------------------- Masking data (bands) with shapefile ----------------------------------------
@@ -185,7 +187,7 @@ def mask_bands(location):
     geoms = gpd.read_file('countries.geojson')
     geoms = geoms.loc[geoms['ADMIN'] == location]
 
-    for filepath in glob.glob("./L8_raw_data/*"):
+    for filepath in glob.glob('./L8_raw_data/*/*.TIF'):
         # Opening file
         print("---- Masking: {}".format(filepath[14:]))
         band = rasterio.open(filepath)
@@ -231,179 +233,245 @@ def get_graph():
 
 
 def compute_indicator(path, indicator):
-    # initialize graph (overwritten after computation)
-    graph = ""
+    i = 1
+    for folder_path in glob.glob(path+'*'):
+        # initialize graph (overwritten after computation)
+        graph = ""
 
-    # Read the images using matplotlib
-    path_of_b4 = ""
-    path_of_b5 = ""
-    path_of_b6 = ""
-    path_of_b7 = ""
+        # Read the images using matplotlib
+        path_of_b4 = ""
+        path_of_b5 = ""
+        path_of_b6 = ""
+        path_of_b7 = ""
 
-    for item in os.listdir(path):
-        if item.endswith('B4.TIF'):
-            path_of_b4 = os.path.join(path, item)
-        if item.endswith('B5.TIF'):
-            path_of_b5 = os.path.join(path, item)
-        if item.endswith('B6.TIF'):
-            path_of_b6 = os.path.join(path, item)
-        if item.endswith('B7.TIF'):
-            path_of_b7 = os.path.join(path, item)
-    band4 = plt.imread(path_of_b4)
-    band5 = plt.imread(path_of_b5)
-    band6 = plt.imread(path_of_b6)
-    band7 = plt.imread(path_of_b7)
+        for item in os.listdir(folder_path):
+            if item.endswith('B4.TIF'):
+                path_of_b4 = os.path.join(folder_path, item)
+            if item.endswith('B5.TIF'):
+                path_of_b5 = os.path.join(folder_path, item)
+            if item.endswith('B6.TIF'):
+                path_of_b6 = os.path.join(folder_path, item)
+            if item.endswith('B7.TIF'):
+                path_of_b7 = os.path.join(folder_path, item)
+        band4 = plt.imread(path_of_b4)
+        band5 = plt.imread(path_of_b5)
+        band6 = plt.imread(path_of_b6)
+        band7 = plt.imread(path_of_b7)
 
-    # selecting the right computation according to the selected indicator by the user
-# ----------------------------- NDVI (Normalized Difference Vegetation Index) computation ------------------------------
-    if indicator == 'NDVI':
-        print('---- Computing NDVI')
+        # selecting the right computation according to the selected indicator by the user
+    # ----------------------------- NDVI (Normalized Difference Vegetation Index) computation ------------------------------
+        if indicator == 'NDVI':
+            print('---- Computing NDVI')
 
-        # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDVI calculation.
-        red = np.array(band4, dtype="int32")
-        nir = np.array(band5, dtype="int32")
+            # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDVI calculation.
+            red = np.array(band4, dtype="int32")
+            nir = np.array(band5, dtype="int32")
 
-        # Calculate NDVI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
-        numerator = np.subtract(nir, red)
-        denominator = np.add(red, nir)
-        ndvi = np.true_divide(numerator, denominator, where=denominator != 0)
+            # Calculate NDVI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+            numerator = np.subtract(nir, red)
+            denominator = np.add(red, nir)
+            ndvi = np.true_divide(numerator, denominator, where=denominator != 0)
 
-        # Truncate values below 0 to 0. Do this because the NDVI values below 0 are not important ecologically.
-        ndvi[ndvi < 0] = 0
+            # Truncate values below 0 to 0. Do this because the NDVI values below 0 are not important ecologically.
+            ndvi[ndvi < 0] = 0
 
-        # Turn 0s into nans to get clear background in the image
-        ndvi_nan = ndvi.copy()
-        ndvi_nan[np.where(abs(red) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
-        ndvi32 = ndvi_nan.astype("float32")
+            # Turn 0s into nans to get clear background in the image
+            ndvi_nan = ndvi.copy()
+            ndvi_nan[np.where(abs(red) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+            ndvi32 = ndvi_nan.astype("float32")
 
-        plt.switch_backend('AGG')
-        plt.title('NDVI')
-        mapPretty = plt.imshow(ndvi32, cmap="Greens")
-        mapPretty.set_clim(0, 1)
-        plt.colorbar(orientation='horizontal', fraction=0.03)
-        plt.axis('off')
-        graph = get_graph()
+            # writing the NDVI image
+            print("writing the NDVI image...")
+            b4 = rasterio.open(path_of_b4)
+            meta = b4.meta
+            meta.update(driver='GTiff')
+            meta.update(dtype=rasterio.float32)
 
-# -------------------------------- NDWI (Normalized Difference Water Index) computation --------------------------------
-    elif indicator == 'NDWI':
-        print('---- Computing NDWI')
+            with rasterio.open('./L8_raw_data/OUTPUT' + str(i) + '.tiff', 'w', **meta) as dst:
+                dst.write(ndvi32, 1)
 
-        # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDWI calculation.
-        nir = np.array(band5, dtype="int32")
-        swir = np.array(band6, dtype="int32")
+            i += 1
 
-        # Calculate NDWI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
-        numerator = np.subtract(nir, swir)
-        denominator = np.add(swir, nir)
-        ndwi = np.true_divide(numerator, denominator, where=denominator != 0)
+    # -------------------------------- NDWI (Normalized Difference Water Index) computation --------------------------------
+        elif indicator == 'NDWI':
+            print('---- Computing NDWI')
 
-        # Truncate values below 0 to 0. Do this because the NDWI values below 0 are not important ecologically.
-        ndwi[ndwi < 0] = 0
+            # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDWI calculation.
+            nir = np.array(band5, dtype="int32")
+            swir = np.array(band6, dtype="int32")
 
-        # Turn 0s into nans to get clear background in the image
-        ndwi_nan = ndwi.copy()
-        ndwi_nan[np.where(abs(swir) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
-        ndwi32 = ndwi_nan.astype("float32")
+            # Calculate NDWI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+            numerator = np.subtract(nir, swir)
+            denominator = np.add(swir, nir)
+            ndwi = np.true_divide(numerator, denominator, where=denominator != 0)
 
-        plt.switch_backend('AGG')
-        plt.title('NDWI')
-        mapPretty = plt.imshow(ndwi32, cmap="Blues")
-        mapPretty.set_clim(0, 1)
-        plt.colorbar(orientation='horizontal', fraction=0.03)
-        plt.axis('off')
-        graph = get_graph()
+            # Truncate values below 0 to 0. Do this because the NDWI values below 0 are not important ecologically.
+            ndwi[ndwi < 0] = 0
 
-# -------------------------------- NDSI (Normalized Difference Soil Index) computation ---------------------------------
-    elif indicator == 'NDSI':
-        print('---- Computing NDSI')
+            # Turn 0s into nans to get clear background in the image
+            ndwi_nan = ndwi.copy()
+            ndwi_nan[np.where(abs(swir) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+            ndwi32 = ndwi_nan.astype("float32")
 
-        # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDSI calculation.
-        nir = np.array(band5, dtype="int32")
-        swir = np.array(band6, dtype="int32")
+            # writing the NDWI image
+            print("writing the NDWI image...")
+            b4 = rasterio.open(path_of_b4)
+            meta = b4.meta
+            meta.update(driver='GTiff')
+            meta.update(dtype=rasterio.float32)
 
-        # Calculate NDSI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
-        numerator = np.subtract(swir, nir)
-        denominator = np.add(swir, nir)
-        ndsi = np.true_divide(numerator, denominator, where=denominator != 0)
+            with rasterio.open('./L8_raw_data/OUTPUT' + str(i) + '.tiff', 'w', **meta) as dst:
+                dst.write(ndwi32, 1)
 
-        # Truncate values below 0 to 0. Do this because the NDSI values below 0 are not important ecologically.
-        ndsi[ndsi < 0] = 0
+            i += 1
 
-        # Turn 0s into nans to get clear background in the image
-        ndsi_nan = ndsi.copy()
-        ndsi_nan[np.where(abs(nir) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
-        ndsi32 = ndsi_nan.astype("float32")
+    # -------------------------------- NDSI (Normalized Difference Soil Index) computation ---------------------------------
+        elif indicator == 'NDSI':
+            print('---- Computing NDSI')
 
-        plt.switch_backend('AGG')
-        plt.title('NDSI')
-        mapPretty = plt.imshow(ndsi32, cmap="YlOrBr")
-        mapPretty.set_clim(0, 1)
-        plt.colorbar(orientation='horizontal', fraction=0.03)
-        plt.axis('off')
-        graph = get_graph()
+            # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDSI calculation.
+            nir = np.array(band5, dtype="int32")
+            swir = np.array(band6, dtype="int32")
 
-# ------------------------------- SLAVI (Specific Leaf Area Vegetation Index) computation ------------------------------
-    elif indicator == 'SLAVI':
-        print('---- Computing SLAVI')
+            # Calculate NDSI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+            numerator = np.subtract(swir, nir)
+            denominator = np.add(swir, nir)
+            ndsi = np.true_divide(numerator, denominator, where=denominator != 0)
 
-        # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the SLAVI calculation.
-        red = np.array(band4, dtype="int32")
-        nir = np.array(band5, dtype="int32")
-        swir = np.array(band6, dtype="int32")
+            # Truncate values below 0 to 0. Do this because the NDSI values below 0 are not important ecologically.
+            ndsi[ndsi < 0] = 0
 
-        # Calculate SLAVI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
-        numerator = nir
-        denominator = np.add(swir, red)
-        slavi = np.true_divide(numerator, denominator, where=denominator != 0)
+            # Turn 0s into nans to get clear background in the image
+            ndsi_nan = ndsi.copy()
+            ndsi_nan[np.where(abs(nir) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+            ndsi32 = ndsi_nan.astype("float32")
 
-        # Truncate values below 0 to 0. Do this because the SLAVI values below 0 are not important ecologically.
-        slavi[slavi < 0] = 0
+            # writing the NDSI image
+            print("writing the NDSI image...")
+            b4 = rasterio.open(path_of_b4)
+            meta = b4.meta
+            meta.update(driver='GTiff')
+            meta.update(dtype=rasterio.float32)
 
-        # Turn 0s into nans to get clear background in the image
-        slavi_nan = slavi.copy()
-        slavi_nan[np.where(abs(red) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
-        slavi32 = slavi_nan.astype("float32")
+            with rasterio.open('./L8_raw_data/OUTPUT' + str(i) + '.tiff', 'w', **meta) as dst:
+                dst.write(ndsi32, 1)
 
-        plt.switch_backend('AGG')
-        plt.title('SLAVI')
-        mapPretty = plt.imshow(slavi32, cmap="YlGn")
-        mapPretty.set_clim(0, 1)
-        plt.colorbar(orientation='horizontal', fraction=0.03)
-        plt.axis('off')
-        graph = get_graph()
+            i += 1
 
-# ---------------------------------- NDRE (Normalized Difference Red Edge) computation ---------------------------------
-    elif indicator == 'NDRE':
-        print('---- Computing NDRE')
+    # ------------------------------- SLAVI (Specific Leaf Area Vegetation Index) computation ------------------------------
+        elif indicator == 'SLAVI':
+            print('---- Computing SLAVI')
 
-        # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDRE calculation.
-        nir = np.array(band5, dtype="int32")
-        swir2 = np.array(band7, dtype="int32")
+            # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the SLAVI calculation.
+            red = np.array(band4, dtype="int32")
+            nir = np.array(band5, dtype="int32")
+            swir = np.array(band6, dtype="int32")
 
-        # Calculate NDRE. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
-        numerator = np.subtract(nir, swir2)
-        denominator = np.add(swir2, nir)
-        ndre = np.true_divide(numerator, denominator, where=denominator != 0)
+            # Calculate SLAVI. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+            numerator = nir
+            denominator = np.add(swir, red)
+            slavi = np.true_divide(numerator, denominator, where=denominator != 0)
 
-        # Truncate values below 0 to 0. Do this because the NDRE values below 0 are not important ecologically.
-        ndre[ndre < 0] = 0
+            # Truncate values below 0 to 0. Do this because the SLAVI values below 0 are not important ecologically.
+            slavi[slavi < 0] = 0
 
-        # Turn 0s into nans to get clear background in the image
-        ndre_nan = ndre.copy()
-        ndre_nan[np.where(abs(nir) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
-        ndre32 = ndre_nan.astype("float32")
+            # Turn 0s into nans to get clear background in the image
+            slavi_nan = slavi.copy()
+            slavi_nan[np.where(abs(red) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+            slavi32 = slavi_nan.astype("float32")
 
-        plt.switch_backend('AGG')
-        plt.title('NDRE')
-        mapPretty = plt.imshow(ndre32, cmap="RdYlGn")
-        mapPretty.set_clim(0, 1)
-        plt.colorbar(orientation='horizontal', fraction=0.03)
-        plt.axis('off')
-        graph = get_graph()
+            # writing the SLAVI image
+            print("writing the SLAVI image...")
+            b4 = rasterio.open(path_of_b4)
+            meta = b4.meta
+            meta.update(driver='GTiff')
+            meta.update(dtype=rasterio.float32)
 
-    # deleting the bands downloaded before as they are not needed anymore
-    bands = glob.glob('./L8_raw_data/*')
-    for band in bands:
-        os.remove(band)
+            with rasterio.open('./L8_raw_data/OUTPUT' + str(i) + '.tiff', 'w', **meta) as dst:
+                dst.write(slavi32, 1)
 
-    return graph
+            i += 1
+
+    # ---------------------------------- NDRE (Normalized Difference Red Edge) computation ---------------------------------
+        elif indicator == 'NDRE':
+            print('---- Computing NDRE')
+
+            # Set the data type to int32 to account for any values that will go beyond the 16-bit range. Turn images into arrays in order to make the NDRE calculation.
+            nir = np.array(band5, dtype="int32")
+            swir2 = np.array(band7, dtype="int32")
+
+            # Calculate NDRE. Need to account for possible 0 division error, so if the denominator equals 0, then consider the result as 0.
+            numerator = np.subtract(nir, swir2)
+            denominator = np.add(swir2, nir)
+            ndre = np.true_divide(numerator, denominator, where=denominator != 0)
+
+            # Truncate values below 0 to 0. Do this because the NDRE values below 0 are not important ecologically.
+            ndre[ndre < 0] = 0
+
+            # Turn 0s into nans to get clear background in the image
+            ndre_nan = ndre.copy()
+            ndre_nan[np.where(abs(nir) == 0)] = np.nan  # Turns all the values that are 0 to nan, this makes the picture clearer (removes background)
+            ndre32 = ndre_nan.astype("float32")
+
+            # writing the NDRE image
+            print("writing the NDRE image...")
+            b4 = rasterio.open(path_of_b4)
+            meta = b4.meta
+            meta.update(driver='GTiff')
+            meta.update(dtype=rasterio.float32)
+
+            with rasterio.open('./L8_raw_data/OUTPUT' + str(i) + '.tiff', 'w', **meta) as dst:
+                dst.write(ndre32, 1)
+
+            i += 1
+
+
+
+# -------------------------------------------- Plotting bands of all scenes --------------------------------------------
+import cartopy.crs as ccrs
+from rasterio.transform import from_origin
+from rasterio.warp import reproject, Resampling
+
+
+def plotting_image(location):
+    geoms = gpd.read_file('countries.geojson')
+    shapefile = geoms.loc[geoms['ADMIN'] == location]
+
+    xmin, xmax, ymin, ymax = [], [], [], []
+
+    for image_path in glob.glob('L8_raw_data/OUTPUT*'):
+        with rasterio.open(image_path) as src_raster:
+            xmin.append(src_raster.bounds.left)
+            xmax.append(src_raster.bounds.right)
+            ymin.append(src_raster.bounds.bottom)
+            ymax.append(src_raster.bounds.top)
+
+    fig, ax = plt.subplots(1, 1, figsize=(20, 15), subplot_kw={'projection': ccrs.UTM(16)})
+
+    ax.set_extent([min(xmin), max(xmax), min(ymin), max(ymax)], ccrs.UTM(16))
+
+    # somehow the shape is not plotted on the final image
+    shapefile.plot(ax=ax, transform=ccrs.PlateCarree())
+
+    for image_path in glob.glob('L8_raw_data/OUTPUT*'):
+        with rasterio.open(image_path) as src_raster:
+            extent = [src_raster.bounds[i] for i in [0, 2, 1, 3]]
+
+            dst_transform = from_origin(src_raster.bounds.left, src_raster.bounds.top, 250, 250)
+
+            width = np.ceil((src_raster.bounds.right - src_raster.bounds.left) / 250.).astype('uint')
+            height = np.ceil((src_raster.bounds.top - src_raster.bounds.bottom) / 250.).astype('uint')
+
+            dst = np.zeros((height, width))
+
+            """I had to add src_crs and dst_crs in order for the re-project to work"""
+            reproject(src_raster.read(1), dst,
+                      src_crs=src_raster.crs,
+                      dst_crs=src_raster.crs,
+                      src_transform=src_raster.transform,
+                      dst_transform=dst_transform,
+                      resampling=Resampling.nearest)
+
+            ax.matshow(np.ma.masked_equal(dst, 0), extent=extent, transform=ccrs.UTM(16))
+
+    fig.savefig('satellite_data_processing/static/multiple_bands_plot.png')

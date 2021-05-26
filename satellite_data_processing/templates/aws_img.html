@@ -4,11 +4,7 @@
 {% block content %}
     <a href="{% url 'aws' %}">Go back to Search</a>
 
-    <br>
+    <img width="1000" src="../static/multiple_bands_plot.png">
 
-    <img src="data:image/png;base64, {{ img|safe }}">
-
-    <br>
-
-    <a href="{{ scene.download_url }}" target="_blank">Click here for more information</a>
+    <a href="{{ scenes.download_url }}" target="_blank">Click here for more information</a>
 {% endblock content %}
