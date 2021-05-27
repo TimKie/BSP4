@@ -426,7 +426,6 @@ def compute_indicator(path, indicator):
             i += 1
 
 
-
 # -------------------------------------------- Plotting bands of all scenes --------------------------------------------
 import cartopy.crs as ccrs
 from rasterio.transform import from_origin
